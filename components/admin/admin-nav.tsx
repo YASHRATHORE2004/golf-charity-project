@@ -25,7 +25,7 @@ import {
   X,
   BarChart3,
   CheckCircle,
-  User
+  User as UserIcon
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -137,7 +137,7 @@ export function AdminNav({ user, profile }: AdminNavProps) {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/admin/profile" className="flex items-center gap-2 cursor-pointer">
-                  <User className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" />
                   Profile
                 </Link>
               </DropdownMenuItem>
