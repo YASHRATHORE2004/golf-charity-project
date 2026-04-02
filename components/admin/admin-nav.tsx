@@ -24,7 +24,8 @@ import {
   Menu,
   X,
   BarChart3,
-  CheckCircle
+  CheckCircle,
+  User
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -132,6 +133,12 @@ export function AdminNav({ user, profile }: AdminNavProps) {
                 <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
                   <LayoutDashboard className="h-4 w-4" />
                   User Dashboard
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/admin/profile" className="flex items-center gap-2 cursor-pointer">
+                  <User className="h-4 w-4" />
+                  Profile
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
