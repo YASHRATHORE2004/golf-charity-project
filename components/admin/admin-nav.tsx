@@ -42,7 +42,7 @@ const navItems = [
   { href: "/admin/draws", label: "Draws", icon: Award },
   { href: "/admin/charities", label: "Charities", icon: Heart },
   { href: "/admin/winners", label: "Winners", icon: CheckCircle },
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  // { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
 ]
 
 export function AdminNav({ user, profile }: AdminNavProps) {

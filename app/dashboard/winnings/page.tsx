@@ -52,8 +52,18 @@ export default function WinningsPage() {
     setLoading(false)
   }
 
-  const handleUploadProof = async (file: File) => {
+const handleUploadProof = async (file: File) => {
     if (!selectedWin) return
+
+    // Validate file type and size (max 5MB)
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image file")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File must be less than 5MB")
+      return
+    }
 
     setUploading(true)
     const supabase = createClient()
@@ -65,27 +75,42 @@ export default function WinningsPage() {
       return
     }
 
-    // Upload file to Supabase Storage (simulated - in production you'd use actual storage)
-    const proofUrl = `/proofs/${user.id}/${selectedWin.id}/${file.name}`
+    try {
+      // Create a unique file name to prevent overwriting
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${user.id}/${selectedWin.id}-${Date.now()}.${fileExt}`
 
-    const { error } = await supabase
-      .from("winners")
-      .update({ 
-        proof_url: proofUrl,
-        verification_status: "submitted"
-      })
-      .eq("id", selectedWin.id)
+      // 1. Upload to Supabase Storage (Bucket name: 'proofs')
+      const { error: uploadError } = await supabase.storage
+        .from('proofs')
+        .upload(fileName, file)
 
-    if (error) {
-      toast.error("Failed to upload proof")
+      if (uploadError) throw uploadError
+
+      // Get the public URL for the uploaded image
+      const { data: { publicUrl } } = supabase.storage
+        .from('proofs')
+        .getPublicUrl(fileName)
+
+      // 2. Update the winners table with the real URL
+      const { error: updateError } = await supabase
+        .from("winners")
+        .update({ 
+          proof_url: publicUrl,
+          verification_status: "submitted"
+        })
+        .eq("id", selectedWin.id)
+
+      if (updateError) throw updateError
+
+      toast.success("Proof uploaded successfully! Admin will review shortly.")
+      setDialogOpen(false)
+      fetchWinnings()
+    } catch (error: any) {
+      toast.error(error.message || "Failed to upload proof")
+    } finally {
       setUploading(false)
-      return
     }
-
-    toast.success("Proof uploaded successfully! Admin will review shortly.")
-    setDialogOpen(false)
-    setUploading(false)
-    fetchWinnings()
   }
 
   const totalWinnings = winnings.reduce((sum, w) => sum + Number(w.prize_amount), 0)

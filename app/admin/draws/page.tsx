@@ -146,11 +146,11 @@ export default function AdminDrawsPage() {
     fetchDraws()
   }
 
-  const publishDraw = async (drawId: string) => {
+const publishDraw = async (drawId: string) => {
     setSubmitting(true)
     const supabase = createClient()
 
-    // Get the draw
+    // 1. Get the draw
     const { data: draw } = await supabase
       .from("draws")
       .select("*")
@@ -163,13 +163,18 @@ export default function AdminDrawsPage() {
       return
     }
 
-    // Get all eligible entries (users with 5 scores and active subscription)
+    // 2. Get all eligible entries (users with active subscriptions)
     const { data: subscriptions } = await supabase
       .from("subscriptions")
       .select("user_id")
       .eq("status", "active")
 
     if (subscriptions) {
+      // Arrays to hold our data before we insert them
+      const entriesToInsert = []
+      const potentialWinners: { userId: string, matchCount: number }[] = []
+
+      // Phase 1: Analyze all subscriptions and scores
       for (const sub of subscriptions) {
         const { data: scores } = await supabase
           .from("golf_scores")
@@ -183,55 +188,77 @@ export default function AdminDrawsPage() {
           const matchCount = entryNumbers.filter(n => draw.winning_numbers.includes(n)).length
           const isWinner = matchCount >= 3
 
-          // Create entry
-          await supabase
-            .from("draw_entries")
-            .upsert({
-              draw_id: drawId,
-              user_id: sub.user_id,
-              entry_numbers: entryNumbers,
-              match_count: matchCount,
-              is_winner: isWinner
-            })
+          entriesToInsert.push({
+            draw_id: drawId,
+            user_id: sub.user_id,
+            entry_numbers: entryNumbers,
+            match_count: matchCount,
+            is_winner: isWinner
+          })
 
-          // Create winner record if applicable
           if (isWinner) {
-            let matchType: "5-match" | "4-match" | "3-match" = "3-match"
-            let prizeAmount = draw.three_match_pool
-
-            if (matchCount === 5) {
-              matchType = "5-match"
-              prizeAmount = draw.five_match_pool
-            } else if (matchCount === 4) {
-              matchType = "4-match"
-              prizeAmount = draw.four_match_pool
-            }
-
-            await supabase
-              .from("winners")
-              .insert({
-                draw_id: drawId,
-                user_id: sub.user_id,
-                match_type: matchType,
-                prize_amount: prizeAmount,
-                verification_status: "pending",
-                payout_status: "pending"
-              })
+            potentialWinners.push({ userId: sub.user_id, matchCount })
           }
         }
       }
+
+      // Phase 2: Insert all entries in bulk
+      if (entriesToInsert.length > 0) {
+        await supabase.from("draw_entries").upsert(entriesToInsert)
+      }
+
+      // Phase 3: Calculate Prize Splits
+      const fiveMatchWinners = potentialWinners.filter(w => w.matchCount === 5)
+      const fourMatchWinners = potentialWinners.filter(w => w.matchCount === 4)
+      const threeMatchWinners = potentialWinners.filter(w => w.matchCount === 3)
+
+      const fiveMatchPrize = fiveMatchWinners.length > 0 ? draw.five_match_pool / fiveMatchWinners.length : 0
+      const fourMatchPrize = fourMatchWinners.length > 0 ? draw.four_match_pool / fourMatchWinners.length : 0
+      const threeMatchPrize = threeMatchWinners.length > 0 ? draw.three_match_pool / threeMatchWinners.length : 0
+
+      // Phase 4: Create winner records with exact split amounts
+      const winnersToInsert = potentialWinners.map(w => {
+        let matchType = "3-match"
+        let prizeAmount = threeMatchPrize
+
+        if (w.matchCount === 5) {
+          matchType = "5-match"
+          prizeAmount = fiveMatchPrize
+        } else if (w.matchCount === 4) {
+          matchType = "4-match"
+          prizeAmount = fourMatchPrize
+        }
+
+        return {
+          draw_id: drawId,
+          user_id: w.userId,
+          match_type: matchType,
+          prize_amount: prizeAmount,
+          verification_status: "pending",
+          payout_status: "pending"
+        }
+      })
+
+      // Insert winners in bulk
+      if (winnersToInsert.length > 0) {
+        await supabase.from("winners").insert(winnersToInsert)
+      }
+
+      // Optional bonus: Since we have the schema flag, let's mark if the jackpot rolls over!
+      const jackpotRolledOver = fiveMatchWinners.length === 0
+
+      // Phase 5: Update draw status
+      await supabase
+        .from("draws")
+        .update({ 
+          status: "published",
+          published_at: new Date().toISOString(),
+          jackpot_rolled_over: jackpotRolledOver
+        })
+        .eq("id", drawId)
     }
 
-    // Update draw status
-    await supabase
-      .from("draws")
-      .update({ 
-        status: "published",
-        published_at: new Date().toISOString()
-      })
-      .eq("id", drawId)
-
-    toast.success("Draw published! Winners have been notified.")
+    toast.success("Draw published! Prizes calculated and winners notified.")
     setSubmitting(false)
     fetchDraws()
   }
