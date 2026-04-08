@@ -252,7 +252,7 @@ export default function HomePage() {
 
             <div className="mt-12 text-center">
               <Button variant="outline" asChild>
-                <Link href="/charities">
+                <Link href="#charities">
                   View All Charities
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
